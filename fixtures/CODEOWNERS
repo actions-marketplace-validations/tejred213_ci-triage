@@ -1,0 +1,9 @@
+# Who owns which tests. ci-triage assigns tickets to the users here and mentions the teams.
+*                       @qa-lead
+/tests/api/             @qa-marco
+/tests/db/              @qa-marco @acme/platform
+/tests/cache/           @acme/platform
+/e2e/                   @qa-priya
+/e2e/login.spec.ts      @qa-sam
+/tests/test_billing*    @qa-jun
+/tests/test_auth.py     @qa-sam

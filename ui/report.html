@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1114" media="(prefers-color-scheme: dark)">
+<title>CI Triage Report</title>
+<!-- One self-contained page: ci-triage puts the triage result in #triage-data below. -->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f6f3;
+    --surface: #ffffff;
+    --surface-2: #f0f0ec;
+    --ink: #17191c;
+    --ink-2: #474c54;
+    --ink-3: #686e77;
+    --line: #e1e1db;
+    --line-2: #cfcfc7;
+    --focus: #2f6feb;
+    --env: #2f5f93;      --env-bg: #e6eef7;
+    --reg: #b42318;      --reg-bg: #fbe9e7;
+    --flaky: #8a5600;    --flaky-bg: #fbf0d9;
+    --contract: #5b36b0; --contract-bg: #efe8fb;
+    --unsure: #555c66;   --unsure-bg: #ebebe7;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1114;
+      --surface: #171a1e;
+      --surface-2: #1e2227;
+      --ink: #e8eaed;
+      --ink-2: #b4b9c1;
+      --ink-3: #8d939c;
+      --line: #2a2f36;
+      --line-2: #3a4049;
+      --focus: #6ea2ff;
+      --env: #9cc3ef;      --env-bg: #182a3d;
+      --reg: #ff9d92;      --reg-bg: #3a1a17;
+      --flaky: #f1c46b;    --flaky-bg: #34280f;
+      --contract: #c7b2ff; --contract-bg: #271d3d;
+      --unsure: #bfc4cb;   --unsure-bg: #262a30;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  @media (pointer: fine) { html { overscroll-behavior: none; } }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.5 var(--sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+  a { color: inherit; }
+  button, input { font: inherit; color: inherit; }
+  button, summary { touch-action: manipulation; }
+  [id] { scroll-margin-top: 16px; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .skip-link {
+    position: absolute; left: 16px; top: -48px; z-index: 10;
+    background: var(--surface); border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 8px 12px; text-decoration: none;
+  }
+  .skip-link:focus-visible { top: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .page { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; }
+
+  /* Header */
+  .eyebrow {
+    margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  h1 {
+    margin: 0; font-size: clamp(22px, 3.2vw, 30px); line-height: 1.2; font-weight: 650;
+    text-wrap: balance; overflow-wrap: anywhere;
+  }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0;
+    list-style: none; color: var(--ink-2); font-size: 14px;
+  }
+  .meta a { text-underline-offset: 3px; }
+  .meta a:hover { color: var(--ink); }
+
+  /* Verdict */
+  .verdict {
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; align-items: start;
+    margin: 24px 0 0; padding: 18px 20px; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--surface);
+  }
+  .verdict .mark {
+    grid-row: span 2; width: 36px; height: 36px; border-radius: 50%;
+    display: grid; place-items: center; font-weight: 700; font-size: 18px;
+  }
+  .verdict h2 { margin: 0; font-size: 18px; line-height: 1.35; text-wrap: balance; }
+  .verdict p { margin: 0; color: var(--ink-2); text-wrap: pretty; }
+  .verdict[data-tone="retry"] .mark { background: var(--env-bg); color: var(--env); }
+  .verdict[data-tone="tickets"] .mark { background: var(--reg-bg); color: var(--reg); }
+  .verdict[data-tone="none"] .mark { background: var(--unsure-bg); color: var(--unsure); }
+
+  /* Cause tiles: also the filter */
+  h2.section { margin: 36px 0 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; }
+  .tile {
+    display: flex; flex-direction: column; gap: 6px; min-width: 0; text-align: left;
+    padding: 12px 14px 14px; border-radius: var(--radius); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line);
+  }
+  .tile:hover { border-color: var(--line-2); background: var(--surface-2); }
+  .tile[aria-pressed="true"] { border-color: currentColor; box-shadow: inset 0 0 0 1px currentColor; }
+  .tile:disabled { cursor: default; opacity: 0.55; }
+  .tile:disabled:hover { background: var(--surface); border-color: var(--line); }
+  .tile .label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .tile .count { font-size: 28px; line-height: 1; font-weight: 650; color: var(--ink); }
+  .tile .share { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+  .tile .share > i { display: block; height: 100%; background: currentColor; transform-origin: left; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cat, currentColor); flex: none; }
+  [data-cat="environment_or_timeout"] { --cat: var(--env); color: var(--cat); }
+  [data-cat="genuine_regression"] { --cat: var(--reg); color: var(--cat); }
+  [data-cat="flaky_test"] { --cat: var(--flaky); color: var(--cat); }
+  [data-cat="api_contract_mismatch"] { --cat: var(--contract); color: var(--cat); }
+  [data-cat="unsure"] { --cat: var(--unsure); color: var(--cat); }
+
+  /* Toolbar */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin: 28px 0 12px; }
+  .toolbar h2.section { margin: 0; }
+  .search {
+    flex: 1 1 260px; max-width: 360px; height: 38px; padding: 0 12px;
+    border-radius: 8px; border: 1px solid var(--line-2); background: var(--surface);
+  }
+  .search::placeholder { color: var(--ink-3); }
+  .status { width: 100%; margin: 0; color: var(--ink-3); font-size: 13px; }
+  .linkish {
+    padding: 0; border: 0; background: none; cursor: pointer;
+    color: var(--focus); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .linkish:hover { color: var(--ink); }
+
+  /* Failure list */
+  .list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .list > li { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+  details.failure {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+    scroll-margin-top: 16px;
+  }
+  details.failure[open] { border-color: var(--line-2); }
+  details.failure > summary {
+    list-style: none; cursor: pointer; border-radius: var(--radius);
+    display: grid; grid-template-columns: 190px minmax(0, 1fr) 150px 150px 14px;
+    gap: 14px; align-items: center; padding: 12px 16px;
+  }
+  details.failure > summary::-webkit-details-marker { display: none; }
+  details.failure > summary:hover { background: var(--surface-2); }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; max-width: 100%; min-width: 0;
+    padding: 3px 9px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  }
+  .chip > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip[data-cat="environment_or_timeout"] { background: var(--env-bg); }
+  .chip[data-cat="genuine_regression"] { background: var(--reg-bg); }
+  .chip[data-cat="flaky_test"] { background: var(--flaky-bg); }
+  .chip[data-cat="api_contract_mismatch"] { background: var(--contract-bg); }
+  .chip[data-cat="unsure"] { background: var(--unsure-bg); }
+  .cause { display: flex; flex-direction: column; gap: 4px; min-width: 0; align-items: flex-start; }
+  .conf { font-size: 12px; color: var(--ink-3); }
+  .test { min-width: 0; }
+  .test .name { display: block; font-weight: 600; overflow-wrap: anywhere; }
+  .test .where { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .owner { min-width: 0; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .owner.none { color: var(--ink-3); font-style: italic; }
+  .action { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+  .action b { font-weight: 650; }
+  .action small { color: var(--ink-3); font-size: 12px; line-height: 1.3; }
+  .prio { display: inline-block; min-width: 26px; padding: 0 6px; margin-right: 6px; border-radius: 5px; font-size: 12px; font-weight: 700; text-align: center; }
+  .prio[data-p="P0"] { background: var(--reg); color: var(--surface); }
+  .prio[data-p="P1"] { background: var(--reg-bg); color: var(--reg); }
+  .prio[data-p="P2"] { background: var(--flaky-bg); color: var(--flaky); }
+  .prio[data-p="P3"] { background: var(--surface-2); color: var(--ink-2); }
+  .chev { width: 14px; height: 14px; justify-self: end; color: var(--ink-3); transition: transform 150ms ease; }
+  details[open] .chev { transform: rotate(90deg); }
+
+  .body { padding: 4px 16px 18px; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .body h3 { margin: 14px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+  .why { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 8px 32px; }
+  .bars { display: grid; gap: 7px; margin: 0; }
+  .bar { display: grid; grid-template-columns: minmax(0, 160px) minmax(0, 1fr) 44px; gap: 10px; align-items: center; font-size: 13px; }
+  .bar dt { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar dd { margin: 0; }
+  .bar .track { display: block; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+  .bar .track > i { display: block; height: 100%; border-radius: 4px; background: currentColor; transform-origin: left; }
+  .bar .p { text-align: right; color: var(--ink-2); }
+  .facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 13px; }
+  .facts dt { color: var(--ink-3); }
+  .facts dd { margin: 0; overflow-wrap: anywhere; }
+  .sev { display: inline-flex; gap: 3px; margin-right: 8px; vertical-align: middle; }
+  .sev > i { width: 14px; height: 6px; border-radius: 2px; background: var(--surface-2); }
+  .sev > i.on { background: var(--reg); }
+  pre {
+    margin: 0; padding: 12px 14px; max-height: 320px; overflow: auto;
+    background: var(--surface-2); border-radius: 8px; border: 1px solid var(--line);
+    font: 12.5px/1.55 var(--mono); white-space: pre; tab-size: 2;
+    overscroll-behavior: contain;
+  }
+
+  .empty {
+    padding: 32px 20px; text-align: center; color: var(--ink-2);
+    border: 1px dashed var(--line-2); border-radius: var(--radius);
+  }
+  .empty p { margin: 0 0 8px; }
+  footer { margin-top: 40px; color: var(--ink-3); font-size: 13px; }
+  footer p { margin: 0 0 4px; }
+
+  @media (max-width: 760px) {
+    .page { padding-top: 20px; }
+    details.failure > summary {
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas: "cause chev" "test test" "owner action";
+      gap: 8px 12px;
+    }
+    .cause { grid-area: cause; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+    .test { grid-area: test; }
+    .owner { grid-area: owner; }
+    .action { grid-area: action; text-align: right; align-items: flex-end; }
+    .chev { grid-area: chev; }
+    .why { grid-template-columns: minmax(0, 1fr); }
+    .bar { grid-template-columns: minmax(0, 130px) minmax(0, 1fr) 40px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .chev { transition: none; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#failures">Skip to Failures</a>
+<main class="page" id="app"></main>
+<script id="triage-data" type="application/json">/*__TRIAGE_DATA__*/null</script>
+<script>
+(() => {
+  // The unfilled template still holds the placeholder comment, which isn't JSON.
+  const data = JSON.parse(document.getElementById('triage-data').textContent.replace('/*__TRIAGE_DATA__*/', ''));
+  const app = document.getElementById('app');
+
+  const nf = new Intl.NumberFormat();
+  const two = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const pct = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 0 });
+  const secs = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'second', unitDisplay: 'narrow', maximumFractionDigits: 1 });
+  const ms = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'millisecond', unitDisplay: 'short', maximumFractionDigits: 0 });
+  const when = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  const plural = (n, one, many = `${one}s`) => `${nf.format(n)} ${n === 1 ? one : many}`;
+
+  // Everything from the report goes in as text, never as HTML: test output can contain markup.
+  function h(tag, props, ...children) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(props ?? {})) {
+      if (v == null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    el.append(...children.flat(Infinity).filter((c) => c != null && c !== false));
+    return el;
+  }
+  const svg = (path) => {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('viewBox', '0 0 16 16');
+    s.setAttribute('aria-hidden', 'true');
+    s.classList.add('chev');
+    s.innerHTML = path; // a constant, not report data
+    return s;
+  };
+
+  if (!data) {
+    app.append(
+      h('p', { class: 'eyebrow' }, 'CI Triage'),
+      h('h1', null, 'No Triage Data'),
+      h('p', null, 'This is the report template. Run ', h('code', null, 'ci-triage <reports>'), ' to write a filled-in triage.html.'),
+    );
+    return;
+  }
+
+  const { run, totals, categories, severityLabels } = data;
+  const catKey = (f) => (f.decision.unsure ? 'unsure' : f.jev.category);
+  const catLabel = (key) => (key === 'unsure' ? 'Unsure' : categories[key]);
+  const isBug = (f) => ['genuine_regression', 'api_contract_mismatch'].includes(f.jev.category) || f.decision.unsure;
+
+  function actionOf(f) {
+    const { retry, ticket, unsure } = f.decision;
+    const who = f.owners.length ? f.owners.join(' ') : 'no owner';
+    if (f.decision.notFromChange) return { prio: null, text: 'Needs triage', note: `Not in the changed files; ticket for ${who}` };
+    if (unsure) return { prio: null, text: 'Needs triage', note: `Jev unsure; ticket for ${who}` };
+    if (ticket?.labels.includes('retries-exhausted')) {
+      return { prio: null, text: 'Needs triage', note: `Still failing after ${plural(run.attempt, 'attempt')}` };
+    }
+    if (retry && ticket) return { prio: ticket.priority, text: 'Re-run + ticket', note: `Fix the test: ${who}` };
+    if (retry) return { prio: null, text: 'Re-run', note: 'Re-running the failed jobs' };
+    if (ticket) return { prio: ticket.priority, text: 'Ticket', note: `For ${who}` };
+    return { prio: null, text: 'Report only', note: 'Not re-run: other failures are real' };
+  }
+
+  // Most urgent first: P0, P1, needs triage, P2, P3, then the rest.
+  function rank(f) {
+    const t = f.decision.ticket;
+    if (t?.priority === 'P0') return 0;
+    if (t?.priority === 'P1') return 1;
+    if (t && !t.priority) return 2;
+    if (t?.priority === 'P2') return 3;
+    if (t?.priority === 'P3') return 4;
+    return 5;
+  }
+  const failures = data.failures
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => rank(a.f) - rank(b.f) || a.i - b.i)
+    .map(({ f }) => f);
+
+  // Filters and the open failure live in the URL hash, so a link shows the same view.
+  const state = { filter: 'all', q: '', open: '' };
+  function readHash() {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const filter = p.get('filter');
+    state.filter = filter && (filter === 'unsure' || filter in categories) ? filter : 'all';
+    state.q = p.get('q') ?? '';
+    state.open = p.get('open') ?? '';
+  }
+  function writeHash() {
+    const p = new URLSearchParams();
+    if (state.filter !== 'all') p.set('filter', state.filter);
+    if (state.q) p.set('q', state.q);
+    if (state.open) p.set('open', state.open);
+    const hash = p.toString();
+    try {
+      history.replaceState(null, '', hash ? `#${hash}` : location.href.split('#')[0]);
+    } catch {
+      // some file:// contexts refuse replaceState; the view still works
+    }
+  }
+  readHash();
+
+  // Header
+  const metaItems = [
+    run.url && h('li', null, h('a', { href: run.url }, 'Open Run ↗')),
+    h('li', { class: 'num' }, `Attempt ${nf.format(run.attempt)} of ${nf.format(run.maxAttempts)}`),
+    totals.failures > 0 && h('li', { class: 'num' }, `${plural(totals.failures, 'failed test')} triaged in ${secs.format(totals.wallMs / 1000)}`),
+    totals.inputTokens > 0 && h('li', { class: 'num' }, `${nf.format(totals.inputTokens)} input tokens`),
+    data.model && h('li', null, 'Model ', h('code', { translate: 'no' }, data.model)),
+  ];
+  app.append(
+    h('header', null,
+      h('p', { class: 'eyebrow' }, 'CI Triage'),
+      h('h1', null, run.title || 'Test Failure Triage'),
+      h('ul', { class: 'meta' }, metaItems),
+    ),
+  );
+
+  // Verdict
+  const flakyTickets = data.failures.filter((f) => f.decision.retry && f.decision.ticket).length;
+  const exhausted = data.failures.some((f) => f.decision.ticket?.labels.includes('retries-exhausted'));
+  const realBugs = data.failures.filter((f) => !f.decision.unsure && isBug(f)).length;
+  const verdict = {
+    retry: {
+      mark: '↻',
+      title: `Re-Running the Failed Jobs (Attempt ${run.attempt + 1} of ${run.maxAttempts})`,
+      body: `Every failure looks like an environment glitch or a flaky test, so a re-run should pass.${flakyTickets ? ` ${plural(flakyTickets, 'flaky test gets', 'flaky tests get')} a P3 ticket so the owners can fix them.` : ''}`,
+    },
+    tickets: {
+      mark: '!',
+      title: `Not Re-Running: ${plural(totals.issues, 'Issue')} for Owners`,
+      body: [
+        exhausted
+          ? `Still failing after ${plural(run.attempt, 'attempt')}, so these aren’t passing glitches.`
+          : realBugs
+            ? 'At least one failure is real, so a re-run would fail again.'
+            : 'Not every failure is clearly a glitch, so nothing re-runs until a person has looked.',
+        totals.issues < totals.tickets ? `${plural(totals.tickets, 'failing test')} grouped by file and cause.` : '',
+        totals.unsure ? `${plural(totals.unsure, 'failure needs', 'failures need')} a person to triage.` : '',
+      ].filter(Boolean).join(' '),
+    },
+    none: {
+      mark: 'i',
+      title: 'No Failed Tests in the Reports',
+      body: 'The run failed before any test reported a failure. Check the build log for a compile, install or lint error.',
+    },
+  }[data.verdict];
+  app.append(
+    h('section', { class: 'verdict', 'data-tone': data.verdict, 'aria-label': 'Verdict' },
+      h('span', { class: 'mark', 'aria-hidden': 'true' }, verdict.mark),
+      h('h2', null, verdict.title),
+      h('p', null, verdict.body),
+    ),
+  );
+  if (!totals.failures) return;
+
+  // Cause tiles
+  const counts = { ...totals.byCategory, unsure: totals.unsure };
+  const tileKeys = [...Object.keys(categories), 'unsure'];
+  const tiles = h('div', { class: 'tiles', role: 'group', 'aria-label': 'Filter by cause' });
+  function renderTiles() {
+    tiles.replaceChildren(
+      ...tileKeys.map((key) => {
+        const n = counts[key] ?? 0;
+        return h('button', {
+          type: 'button', class: 'tile', 'data-cat': key,
+          'aria-pressed': String(state.filter === key), disabled: n === 0 && state.filter !== key,
+          onclick: () => setFilter(state.filter === key ? 'all' : key),
+        },
+          h('span', { class: 'label' }, h('span', { class: 'dot', 'aria-hidden': 'true' }), catLabel(key)),
+          h('span', { class: 'count num' }, nf.format(n)),
+          h('span', { class: 'share', 'aria-hidden': 'true' }, h('i', { style: `transform: scaleX(${n / totals.failures})` })),
+        );
+      }),
+    );
+  }
+  app.append(h('h2', { class: 'section' }, 'Causes'), tiles);
+
+  // Toolbar and list
+  const search = h('input', {
+    id: 'search', class: 'search', type: 'search', name: 'q', autocomplete: 'off', spellcheck: 'false',
+    placeholder: 'Search tests, owners, errors…',
+    oninput: (e) => { state.q = e.target.value; writeHash(); renderList(); },
+  });
+  search.value = state.q;
+  const status = h('p', { class: 'status', 'aria-live': 'polite' });
+  const list = h('ol', { class: 'list' });
+  app.append(
+    h('div', { class: 'toolbar' },
+      h('h2', { class: 'section', id: 'failures', tabindex: '-1' }, 'Failures'),
+      h('label', { for: 'search', class: 'visually-hidden' }, 'Search failures'),
+      search,
+      status,
+    ),
+    list,
+  );
+
+  function setFilter(key) {
+    state.filter = key;
+    writeHash();
+    renderTiles();
+    renderList();
+  }
+  function clearFilters() {
+    state.filter = 'all';
+    state.q = '';
+    search.value = '';
+    writeHash();
+    renderTiles();
+    renderList();
+    search.focus();
+  }
+
+  const haystack = (f) => [f.id, f.file, f.owners.join(' '), f.message, catLabel(catKey(f))].join('\n').toLowerCase();
+
+  function failureItem(f) {
+    const key = catKey(f);
+    const act = actionOf(f);
+    const details = h('details', { class: 'failure', id: `f-${data.failures.indexOf(f)}`, open: state.open === f.id },
+      h('summary', null,
+        h('span', { class: 'cause' },
+          h('span', { class: 'chip', 'data-cat': key },
+            h('span', { class: 'dot', 'aria-hidden': 'true' }),
+            h('span', null, key === 'unsure' ? `${f.decision.notFromChange ? 'Not in Change' : 'Unsure'} · ${categories[f.jev.category]}?` : categories[key]),
+          ),
+          h('span', { class: 'conf num' }, `${two.format(f.jev.confidence)} confidence`),
+        ),
+        h('span', { class: 'test' },
+          h('span', { class: 'name', translate: 'no' }, f.name),
+          h('span', { class: 'where mono', translate: 'no', title: f.file || f.suite }, f.file || f.suite || '—'),
+        ),
+        h('span', { class: f.owners.length ? 'owner' : 'owner none', translate: 'no' }, f.owners.length ? f.owners.join(' ') : 'No owner'),
+        h('span', { class: 'action' },
+          h('b', null, act.prio && h('span', { class: 'prio', 'data-p': act.prio }, act.prio), act.text),
+          h('small', null, act.note),
+        ),
+        svg('<path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'),
+      ),
+    );
+    // Build the body on first open: a long run stays cheap to render.
+    let built = false;
+    const build = () => {
+      if (built) return;
+      built = true;
+      details.append(failureBody(f));
+    };
+    if (details.open) build();
+    details.addEventListener('toggle', () => {
+      if (details.open) {
+        build();
+        state.open = f.id;
+      } else if (state.open === f.id) {
+        state.open = '';
+      }
+      writeHash();
+    });
+    return h('li', null, details);
+  }
+
+  function failureBody(f) {
+    const probs = Object.entries(f.jev.probabilities).sort((a, b) => b[1] - a[1]);
+    const sev = f.jev.severity;
+    const level = Math.round(sev.score);
+    return h('div', { class: 'body' },
+      h('div', { class: 'why' },
+        h('div', null,
+          h('h3', null, 'How Jev Read It'),
+          h('dl', { class: 'bars' },
+            probs.map(([k, p]) =>
+              h('div', { class: 'bar', 'data-cat': k },
+                h('dt', null, categories[k]),
+                h('dd', { 'aria-hidden': 'true' }, h('span', { class: 'track' }, h('i', { style: `transform: scaleX(${p})` }))),
+                h('dd', { class: 'p num' }, pct.format(p)),
+              ),
+            ),
+          ),
+        ),
+        h('div', null,
+          h('h3', null, 'Details'),
+          h('dl', { class: 'facts' },
+            isBug(f) && [
+              h('dt', null, 'If shipped'),
+              h('dd', null,
+                h('span', { class: 'sev', 'aria-hidden': 'true' }, severityLabels.map((_, i) => h('i', { class: i <= level ? 'on' : null }))),
+                `${severityLabels[level]} `,
+                h('span', { class: 'num', style: 'color: var(--ink-3)' }, `(${two.format(sev.score)} of ${severityLabels.length - 1})`),
+              ),
+            ],
+            f.jev.touchesChange != null && [
+              h('dt', null, 'In the change'),
+              h('dd', { class: 'num' }, `${pct.format(f.jev.touchesChange)} that the changed files touch this test`),
+            ],
+            h('dt', null, 'Test'), h('dd', { class: 'mono', translate: 'no' }, f.id),
+            f.file && [h('dt', null, 'File'), h('dd', { class: 'mono', translate: 'no' }, f.file)],
+            h('dt', null, 'Report'), h('dd', { class: 'mono', translate: 'no' }, f.source || '—'),
+            h('dt', null, 'Jev call'), h('dd', { class: 'num' }, `${ms.format(f.jev.ms)} · ${nf.format(f.jev.inputTokens)} input tokens`),
+          ),
+        ),
+      ),
+      h('div', null,
+        h('h3', null, f.kind === 'error' ? 'Error' : 'Failure'),
+        h('pre', { translate: 'no', tabindex: '0', 'aria-label': 'Failure message' }, f.message || '(no message)'),
+      ),
+      f.details && h('div', null,
+        h('h3', null, 'Stack Trace / Diff'),
+        h('pre', { translate: 'no', tabindex: '0', 'aria-label': 'Stack trace or diff' }, f.details),
+      ),
+      f.output && h('div', null,
+        h('h3', null, 'Test Output'),
+        h('pre', { translate: 'no', tabindex: '0', 'aria-label': 'Test output' }, f.output),
+      ),
+    );
+  }
+
+  function renderList() {
+    const q = state.q.trim().toLowerCase();
+    const shown = failures.filter((f) => (state.filter === 'all' || catKey(f) === state.filter) && (!q || haystack(f).includes(q)));
+    status.textContent =
+      shown.length === failures.length
+        ? `${plural(failures.length, 'failure')}, most urgent first`
+        : `Showing ${nf.format(shown.length)} of ${plural(failures.length, 'failure')}`;
+    if (!shown.length) {
+      list.replaceChildren(
+        h('li', { class: 'empty' },
+          h('p', null, 'No failures match these filters.'),
+          h('button', { type: 'button', class: 'linkish', onclick: clearFilters }, 'Clear Filters'),
+        ),
+      );
+      return;
+    }
+    list.replaceChildren(...shown.map(failureItem));
+  }
+
+  renderTiles();
+  renderList();
+
+  const opened = state.open && list.querySelector('details[open]');
+  if (opened) opened.scrollIntoView({ block: 'start' });
+
+  app.append(
+    h('footer', null,
+      h('p', null, `Generated ${when.format(new Date(data.generatedAt))} by ci-triage. Jev returns typed answers with probabilities; the routing rules are code in `, h('code', null, 'src/policy.js'), '.'),
+      h('p', null, 'The full result, including every probability, is in ', h('code', null, 'triage.json'), ' next to this file.'),
+    ),
+  );
+})();
+</script>
+</body>
+</html>

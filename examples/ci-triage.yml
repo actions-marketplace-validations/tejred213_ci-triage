@@ -1,0 +1,40 @@
+# Copy to .github/workflows/ci-triage.yml in the repository whose tests you want triaged.
+#
+# It runs after your test workflow finishes with a failure, downloads the JUnit reports that
+# workflow uploaded, and lets ci-triage re-run the failed jobs or file tickets.
+name: CI triage
+
+on:
+  workflow_run:
+    workflows: [CI] # the name of the workflow that runs your tests
+    types: [completed]
+
+permissions:
+  actions: write # re-run failed jobs, download the other run's artifacts
+  issues: write # file and comment on tickets
+  contents: read # read CODEOWNERS
+
+jobs:
+  triage:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Your test workflow must upload its JUnit XML, e.g.
+      #   - uses: actions/upload-artifact@v4
+      #     if: always()
+      #     with: { name: junit, path: reports/ }
+      - uses: actions/download-artifact@v4
+        with:
+          name: junit
+          path: reports
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - uses: tejred213/ci-triage@main # or pin a commit SHA
+        with:
+          reports: reports
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          default-owner: '@your-qa-lead'
+          # dry-run: true   # print what it would do, first

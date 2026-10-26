@@ -1,0 +1,116 @@
+<testsuites id="" name="" tests="8" failures="5" skipped="0" errors="0" time="96.43">
+<testsuite name="e2e/checkout.spec.ts" timestamp="2026-10-25T09:13:40.112Z" hostname="chromium" tests="3" failures="1" skipped="0" time="41.2" errors="0">
+<testcase name="Checkout › saves the shipping address" classname="e2e/checkout.spec.ts" time="30.04">
+<failure message="checkout.spec.ts:24:5 saves the shipping address" type="FAILURE">
+<![CDATA[  [chromium] › e2e/checkout.spec.ts:24:5 › Checkout › saves the shipping address ──────────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Element is not attached to the DOM
+    Call log:
+      - waiting for getByRole('button', { name: 'Save address' })
+      - locator resolved to <button type="submit" class="btn">Save address</button>
+      - attempting click action
+      -   waiting for element to be visible, enabled and stable
+      -   element is not stable - waiting...
+      -   element was detached from the DOM, retrying
+
+      30 |     await page.getByLabel('Postcode').fill('94107');
+      31 |     await page.getByRole('combobox', { name: 'Country' }).selectOption('US');
+    > 32 |     await page.getByRole('button', { name: 'Save address' }).click();
+         |                                                               ^
+      33 |     await expect(page.getByRole('status')).toHaveText('Saved');
+
+        at /home/runner/work/shop/shop/e2e/checkout.spec.ts:32:63
+]]>
+</failure>
+<system-out>
+<![CDATA[[checkout] address form re-rendered after country change (2 renders)
+]]>
+</system-out>
+</testcase>
+<testcase name="Checkout › shows the order summary" classname="e2e/checkout.spec.ts" time="4.1"></testcase>
+<testcase name="Checkout › applies a discount code" classname="e2e/checkout.spec.ts" time="15.6">
+<failure message="checkout.spec.ts:61:5 applies a discount code" type="FAILURE">
+<![CDATA[  [chromium] › e2e/checkout.spec.ts:61:5 › Checkout › applies a discount code ──────────
+
+    Error: page.waitForResponse: Timeout 15000ms exceeded while waiting for event "response"
+
+      64 |     await page.getByLabel('Discount code').fill('AUTUMN10');
+    > 65 |     const res = page.waitForResponse('**/api/cart/discount');
+         |                      ^
+      66 |     await page.getByRole('button', { name: 'Apply' }).click();
+
+        at /home/runner/work/shop/shop/e2e/checkout.spec.ts:65:22
+]]>
+</failure>
+</testcase>
+</testsuite>
+<testsuite name="e2e/search.spec.ts" timestamp="2026-10-25T09:14:21.502Z" hostname="chromium" tests="2" failures="1" skipped="0" time="9.8" errors="0">
+<testcase name="Search › lists the newest orders first" classname="e2e/search.spec.ts" time="6.3">
+<failure message="search.spec.ts:18:5 lists the newest orders first" type="FAILURE">
+<![CDATA[  [chromium] › e2e/search.spec.ts:18:5 › Search › lists the newest orders first ──────────
+
+    Error: expect(locator).toHaveText(expected)
+
+    Locator: getByTestId('order-row')
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "Order #1043",
+        "Order #1042",
+    +   "Order #1043",
+        "Order #1041",
+      ]
+
+        at /home/runner/work/shop/shop/e2e/search.spec.ts:27:48
+]]>
+</failure>
+<system-out>
+<![CDATA[[seed] inserted orders 1041, 1042, 1043 with created_at = now()
+]]>
+</system-out>
+</testcase>
+<testcase name="Search › filters by status" classname="e2e/search.spec.ts" time="3.5"></testcase>
+</testsuite>
+<testsuite name="e2e/login.spec.ts" timestamp="2026-10-25T09:14:31.330Z" hostname="chromium" tests="1" failures="1" skipped="0" time="2.4" errors="0">
+<testcase name="SSO › signs in with Okta" classname="e2e/login.spec.ts" time="2.4">
+<failure message="login.spec.ts:9:5 signs in with Okta" type="FAILURE">
+<![CDATA[  [chromium] › e2e/login.spec.ts:9:5 › SSO › signs in with Okta ──────────
+
+    Error: page.goto: net::ERR_NAME_NOT_RESOLVED at https://sso.staging.acme.internal/login
+    Call log:
+      - navigating to "https://sso.staging.acme.internal/login", waiting until "load"
+
+        at /home/runner/work/shop/shop/e2e/login.spec.ts:11:16
+]]>
+</failure>
+</testcase>
+</testsuite>
+<testsuite name="e2e/profile.spec.ts" timestamp="2026-10-25T09:14:33.901Z" hostname="chromium" tests="2" failures="1" skipped="0" time="12.1" errors="0">
+<testcase name="Profile › shows the avatar in the header" classname="e2e/profile.spec.ts" time="5.2">
+<failure message="profile.spec.ts:14:5 shows the avatar in the header" type="FAILURE">
+<![CDATA[  [chromium] › e2e/profile.spec.ts:14:5 › Profile › shows the avatar in the header ──────────
+
+    Error: Timed out 5000ms waiting for expect(locator).toBeVisible()
+
+    Locator: getByTestId('profile-avatar')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+      - expect.toBeVisible with timeout 5000ms
+      - waiting for getByTestId('profile-avatar')
+
+        at /home/runner/work/shop/shop/e2e/profile.spec.ts:19:52
+]]>
+</failure>
+<system-out>
+<![CDATA[DOM at failure (header):
+<header class="app-header"><nav>…</nav><div class="account"><img data-testid="user-avatar" src="/avatars/u_19.png" alt="Dana"><span>Dana</span></div></header>
+]]>
+</system-out>
+</testcase>
+<testcase name="Profile › edits the display name" classname="e2e/profile.spec.ts" time="6.9"></testcase>
+</testsuite>
+</testsuites>

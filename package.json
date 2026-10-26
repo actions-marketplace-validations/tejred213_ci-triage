@@ -1,0 +1,22 @@
+{
+  "name": "ci-triage",
+  "version": "0.1.0",
+  "description": "Classifies CI test failures with Jev (TypeSafe) and routes them: retry the build or file a ticket for the test's owner.",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ci-triage": "bin/triage.mjs",
+    "ci-triage-act": "bin/act.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "demo": "node scripts/demo.mjs"
+  },
+  "engines": {
+    "node": ">=22.15"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.7.0",
+    "fast-xml-parser": "^5.11.2"
+  }
+}

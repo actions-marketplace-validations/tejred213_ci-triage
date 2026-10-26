@@ -1,0 +1,91 @@
+name: Jev CI triage
+description: Classify failed tests with Jev (TypeSafe), then re-run the build or file tickets for the tests' owners.
+inputs:
+  reports:
+    description: JUnit XML files or directories, separated by spaces
+    required: true
+  typesafe-api-key:
+    description: TypeSafe API key (https://console.typesafe.ai/keys)
+    required: true
+  codeowners:
+    description: CODEOWNERS file that maps test files to owners
+    default: .github/CODEOWNERS
+  default-owner:
+    description: Owner of tests that CODEOWNERS doesn't cover, e.g. @qa-lead
+    default: ''
+  max-attempts:
+    description: Re-run a failed workflow run at most this many times in total
+    default: '3'
+  run-id:
+    description: The workflow run that failed
+    default: ${{ github.event.workflow_run.id }}
+  attempt:
+    description: Which attempt of that run failed
+    default: ${{ github.event.workflow_run.run_attempt }}
+  head-sha:
+    description: The commit that was tested, for the list of changed files
+    default: ${{ github.event.workflow_run.head_sha }}
+  run-title:
+    description: How the report names the run
+    default: '${{ github.event.workflow_run.name }} #${{ github.event.workflow_run.run_number }} on ${{ github.event.workflow_run.head_branch }}'
+  dry-run:
+    description: Print the gh commands instead of running them
+    default: 'false'
+  github-token:
+    description: Token for gh; needs actions:write and issues:write
+    default: ${{ github.token }}
+outputs:
+  verdict:
+    description: retry, tickets or none
+    value: ${{ steps.classify.outputs.verdict }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - name: Install ci-triage
+      shell: bash
+      run: npm ci --omit=dev --prefix "$GITHUB_ACTION_PATH"
+    - name: List the files the commit changed
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        SHA: ${{ inputs.head-sha }}
+      run: |
+        gh api "repos/$GITHUB_REPOSITORY/commits/$SHA" --jq '.files[].filename' > "$RUNNER_TEMP/changed-files.txt" \
+          || : > "$RUNNER_TEMP/changed-files.txt"
+    - name: Classify the failures
+      id: classify
+      shell: bash
+      env:
+        TYPESAFE_API_KEY: ${{ inputs.typesafe-api-key }}
+        REPORTS: ${{ inputs.reports }}
+        CODEOWNERS: ${{ inputs.codeowners }}
+        DEFAULT_OWNER: ${{ inputs.default-owner }}
+        ATTEMPT: ${{ inputs.attempt }}
+        MAX_ATTEMPTS: ${{ inputs.max-attempts }}
+        RUN_TITLE: ${{ inputs.run-title }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.run-id }}
+      run: |
+        # REPORTS is split on spaces on purpose: it is a list of paths.
+        node "$GITHUB_ACTION_PATH/bin/triage.mjs" \
+          --codeowners "$CODEOWNERS" ${DEFAULT_OWNER:+--default-owner "$DEFAULT_OWNER"} \
+          --changed-files "$RUNNER_TEMP/changed-files.txt" \
+          --attempt "${ATTEMPT:-1}" --max-attempts "$MAX_ATTEMPTS" \
+          --title "$RUN_TITLE" --run-url "$RUN_URL" \
+          --out "$RUNNER_TEMP/ci-triage" $REPORTS
+    - name: Upload the report
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-triage-report
+        path: ${{ runner.temp }}/ci-triage
+    - name: Re-run or file tickets
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        RUN_ID: ${{ inputs.run-id }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        node "$GITHUB_ACTION_PATH/bin/act.mjs" "$RUNNER_TEMP/ci-triage/triage.json" \
+          --repo "$GITHUB_REPOSITORY" --run-id "$RUN_ID" $([ "$DRY_RUN" = true ] && echo --dry-run)

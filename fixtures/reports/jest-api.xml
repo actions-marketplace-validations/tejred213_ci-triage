@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="9" failures="4" errors="0" time="14.82">
+  <testsuite name="orders API" errors="0" failures="1" skipped="0" timestamp="2026-10-25T09:12:03" time="3.104" tests="3" file="tests/api/orders.test.ts">
+    <testcase classname="orders API lists orders" name="orders API lists orders" time="0.311" file="tests/api/orders.test.ts"></testcase>
+    <testcase classname="orders API creates an order" name="orders API creates an order" time="0.428" file="tests/api/orders.test.ts">
+      <failure message="expect(received).toMatchObject(expected)"><![CDATA[Error: expect(received).toMatchObject(expected)
+
+- Expected  - 2
++ Received  + 4
+
+  Object {
+-   "currency": "USD",
++   "amount": Object {
++     "currency": "USD",
++     "value_cents": 4250,
++   },
+    "id": "ord_8812",
+    "status": "pending",
+-   "total": 42.5,
+  }
+    at Object.<anonymous> (tests/api/orders.test.ts:38:24)]]></failure>
+      <system-out>POST http://localhost:4000/v2/orders -> 201 (184 ms)</system-out>
+    </testcase>
+    <testcase classname="orders API cancels an order" name="orders API cancels an order" time="0.287" file="tests/api/orders.test.ts"></testcase>
+  </testsuite>
+  <testsuite name="payments refunds" errors="0" failures="1" skipped="0" timestamp="2026-10-25T09:12:06" time="2.031" tests="2" file="tests/api/payments.test.ts">
+    <testcase classname="payments refunds refunds the full amount" name="payments refunds refunds the full amount" time="0.402" file="tests/api/payments.test.ts"></testcase>
+    <testcase classname="payments refunds refunds a partial amount" name="payments refunds refunds a partial amount" time="0.119" file="tests/api/payments.test.ts">
+      <failure message="TypeError: Cannot read properties of undefined (reading 'amount')"><![CDATA[TypeError: Cannot read properties of undefined (reading 'amount')
+    at computeRefund (src/payments/refund.ts:42:31)
+    at RefundService.refund (src/payments/service.ts:88:12)
+    at Object.<anonymous> (tests/api/payments.test.ts:57:20)]]></failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="inventory db" errors="0" failures="1" skipped="0" timestamp="2026-10-25T09:12:08" time="5.212" tests="2" file="tests/db/inventory.test.ts">
+    <testcase classname="inventory db reserves stock atomically" name="inventory db reserves stock atomically" time="5.006">
+      <failure message="connect ECONNREFUSED 127.0.0.1:5432"><![CDATA[Error: connect ECONNREFUSED 127.0.0.1:5432
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1611:16)
+    at Pool.connect (node_modules/pg-pool/index.js:45:11)
+    at Object.<anonymous> (tests/db/inventory.test.ts:12:5)]]></failure>
+      <system-out>[db] waiting for postgres at 127.0.0.1:5432 (attempt 1/5)
+[db] waiting for postgres at 127.0.0.1:5432 (attempt 5/5)
+[db] giving up</system-out>
+    </testcase>
+    <testcase classname="inventory db releases stock" name="inventory db releases stock" time="0.101"></testcase>
+  </testsuite>
+  <testsuite name="session cache" errors="0" failures="1" skipped="0" timestamp="2026-10-25T09:12:13" time="5.031" tests="2" file="tests/cache/session.test.ts">
+    <testcase classname="session cache expires sessions after the ttl" name="session cache expires sessions after the ttl" time="5.002" file="tests/cache/session.test.ts">
+      <failure message="thrown: &quot;Exceeded timeout of 5000 ms for a hook.&quot;"><![CDATA[thrown: "Exceeded timeout of 5000 ms for a hook.
+Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+    at beforeAll (tests/cache/session.test.ts:9:3)]]></failure>
+      <system-err>Error: Redis connection to redis:6379 failed - getaddrinfo ENOTFOUND redis</system-err>
+    </testcase>
+    <testcase classname="session cache stores sessions" name="session cache stores sessions" time="0.012" file="tests/cache/session.test.ts"></testcase>
+  </testsuite>
+</testsuites>
