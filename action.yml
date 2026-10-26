@@ -1,5 +1,8 @@
 name: Jev CI triage
 description: Classify failed tests with Jev (TypeSafe), then re-run the build or file tickets for the tests' owners.
+branding:
+  icon: filter
+  color: purple
 inputs:
   reports:
     description: JUnit XML files or directories, separated by spaces
