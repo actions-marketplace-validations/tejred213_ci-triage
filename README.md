@@ -1,4 +1,4 @@
-# ci-triage
+# Jev CI triage
 
 A CI gate that reads failed tests before anyone gets a ticket. [Jev](https://docs.typesafe.ai)
 — TypeSafe's System One model — decides what caused each failure, and code decides what to
@@ -18,7 +18,76 @@ the classifications.
 A run is re-run only when **every** failure in it would be fixed by re-running, and at most
 3 attempts in total. After that, the remaining failures become `needs-triage` tickets.
 
-## Try it
+## Quick start
+
+1. Make your test workflow upload its JUnit XML, even when tests fail:
+
+   ```yaml
+   - uses: actions/upload-artifact@v4
+     if: always()
+     with:
+       name: junit
+       path: reports/   # wherever your test runner writes JUnit XML
+   ```
+
+   Jest: `jest-junit`. Playwright: `reporter: [['junit', …]]`. pytest: `--junitxml`, with
+   `-o junit_family=xunit1` so test cases carry their file.
+2. Add a `TYPESAFE_API_KEY` repository secret ([get a key](https://console.typesafe.ai/keys)).
+3. Add `.github/workflows/ci-triage.yml`:
+
+```yaml
+name: CI triage
+
+on:
+  workflow_run:
+    workflows: [CI] # the name of the workflow that runs your tests
+    types: [completed]
+
+permissions:
+  actions: write # re-run failed jobs, download the other run's artifacts
+  issues: write # file and comment on tickets
+  contents: read # read CODEOWNERS
+
+jobs:
+  triage:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: junit
+          path: reports
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+      - uses: tejred213/ci-triage@v1
+        with:
+          reports: reports
+          typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
+          default-owner: '@your-qa-lead'
+          dry-run: true # prints what it would do; remove when you're happy with it
+```
+
+The next time CI fails, the triage job's summary shows each failure's cause, and the
+`ci-triage-report` artifact holds the HTML report. With `dry-run: true` the log shows the `gh`
+commands it would have run instead of running them.
+
+### Inputs
+
+| Input | Default | |
+| --- | --- | --- |
+| `reports` | (required) | JUnit XML files or directories, separated by spaces |
+| `typesafe-api-key` | (required) | TypeSafe API key |
+| `default-owner` | none | Owner of tests that CODEOWNERS doesn't cover, e.g. `@qa-lead` |
+| `codeowners` | `.github/CODEOWNERS` | CODEOWNERS file that maps test files to owners |
+| `max-attempts` | `3` | Re-run a failed workflow run at most this many times in total |
+| `dry-run` | `false` | Print the `gh` commands instead of running them |
+| `github-token` | `github.token` | Needs `actions: write` and `issues: write` |
+| `run-id`, `attempt`, `head-sha`, `run-title` | from the `workflow_run` event | Which run to triage, and how the report names it |
+
+Output: `verdict`, one of `retry`, `tickets` or `none`.
+
+## Try it locally
 
 ```bash
 npm install
@@ -35,18 +104,7 @@ judgment; the report says `mock (keyword rules, not Jev)` as its model.
 npm test   # parser, CODEOWNERS, routing rules, and the CLI end to end against the mock
 ```
 
-## Use it in GitHub Actions
-
-1. Make your test workflow upload its JUnit XML as an artifact (Jest: `jest-junit`;
-   Playwright: `reporter: [['junit', …]]`; pytest: `--junitxml`, with `-o junit_family=xunit1`
-   so test cases carry their file).
-2. Add `TYPESAFE_API_KEY` as a repository secret.
-3. Copy [examples/ci-triage.yml](examples/ci-triage.yml) to `.github/workflows/` and point it
-   at your test workflow's name and artifact. It runs when that workflow fails, calls the
-   composite action in [action.yml](action.yml), and uploads `ci-triage-report` (the HTML
-   report and `triage.json`).
-
-Set `dry-run: true` first: the job log then shows the `gh` commands it would run.
+## How tickets are filed
 
 Owners come from `.github/CODEOWNERS`, matched against the failing test's file. Users are
 assigned; teams are mentioned in the issue body (GitHub can't assign teams). Tests that

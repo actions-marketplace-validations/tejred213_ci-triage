@@ -32,7 +32,7 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
-      - uses: tejred213/ci-triage@main # or pin a commit SHA
+      - uses: tejred213/ci-triage@v1 # or pin a commit SHA
         with:
           reports: reports
           typesafe-api-key: ${{ secrets.TYPESAFE_API_KEY }}
